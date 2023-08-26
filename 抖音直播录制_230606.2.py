@@ -31,7 +31,7 @@ import shutil
 import hashlib
 
 
-version=230606.2  #请注意把下面这个地方和文件名改了就行啦
+version=230606.3  #请注意把下面这个地方和文件名改了就行啦
 #pyinstaller -F 抖音直播录制_230606.2.py
 
 #log日志---------------------------------------------------------------
@@ -85,6 +85,7 @@ delFilebeforeconversion=""
 tranform_int_to_time=""
 tranform_int_to_time=""
 cookiesSet=""
+cookiesSet_homepage=""
 displayChrome=""
 chrome_options=""
 videoQuality=""
@@ -184,6 +185,9 @@ headers = {'User-Agent': 'Mozilla/5.0 (Linux; U; Android 8.1.0; en-US; Nexus 6P 
 
 
 def updateFile(file,old_str,new_str):
+    #不允许字符串替换为空
+    if new_str==None or new_str=="":
+        return ""
     file_data = ""
     with open(file, "r", encoding="utf-8-sig") as f:
         for line in f:
@@ -192,6 +196,19 @@ def updateFile(file,old_str,new_str):
             file_data += line
     with open(file,"w",encoding="utf-8-sig") as f:
         f.write(file_data)
+
+
+def auto_getcookies():
+    global cookiesSet    
+    try:
+        time.sleep(1800) #半个小时
+        print("获取直播间cookies一次")
+        cookiesSet = get_cookies()
+
+    except:
+        pass
+    
+
 
 def get_cookies():
     try:
@@ -1349,22 +1366,40 @@ def startgo(line,countvariable=-1):
             print("线程崩溃2秒后重试.错误信息: "+str(e)  +" 发生错误的行数: "+str(e.__traceback__.tb_lineno))
             warning_count+=1
             time.sleep(2)
+
 def searchUserWeb(url):
     # re=requests.get("https://www.douyin.com/user/MS4wLjABAAAAfSxBYimoCmZ8PjEV0yd0ETo9gZHW9DJCHO0arjojTuQ")
     try:
+        
         # headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36 Edg/108.0.1462.76'}
-        re=requests.get(url=url,proxies=None)
-        p1=re.text.find("https://live.douyin.com/")
-        res=re.text[p1:]
+        headers3 = {"referer": "https://www.douyin.com/",
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/109.0.0.0 Safari/537.36',
+        "cookie":cookiesSet_homepage}
+
+
+        # re=requests.get(url=url,proxies=None)
+        re=requests.get(url=url,headers=headers3)
+        # print(re.text)
+        p1=re.text.find("><a href=\"https://live.douyin.com/")
+        res=re.text[p1:] 
         p2=res.find("?")
-        res=res[:p2]
-        url=res
+        res=res[:p2]    
+        p3=res.rfind("https://live.douyin.com/")
+        res=res[p3:]    
+        
+        if len(str(res))>40 or res.find("live.douyin.com")<0:
+            print("主页解析未完成,有可能是没有在直播.直播时会自动转成直播间网址:"+url)
+        else:
+            
+            print("主页解析完成:"+url)
+            return res
+
+        
     except Exception as e:    
         print("错误信息644:"+str(e)+"\r\n读取的地址为: "+str(rid) +" 发生错误的行数: "+str(e.__traceback__.tb_lineno)  )
         # print(rid+' 的直播地址连接失败,请检测这个地址是否正常,可以重启本程序--requests获取失败')
         logger.warning("错误信息: "+str(e)  +" 发生错误的行数: "+str(e.__traceback__.tb_lineno)) 
     # print(res)
-    return url
     
 
 def checkUrlTxt(UrlTxt):
@@ -2121,6 +2156,7 @@ def stargo_single():
             # print("live_streaming",live_streaming)
 
             if info not in live_streaming:
+
                 portInfo=get_url_state(info)
                 if len(portInfo)==4 and portInfo[1]==2:
                     # down_live((portInfo,info))
@@ -2145,7 +2181,65 @@ def stargo_single():
         time.sleep(1)    
         time.sleep(localdelaydefault)
 
+def homepage_monitoring():  #主页监控
+    i=0
+    while True:
+        try:
+            if cookiesSet_homepage != "":
+                resline=""
+                with open("URL_config.ini", "r", encoding="utf-8-sig") as file:
+                    for line in file:      
+                        i = i+1  
+                        line=line.strip()
+                        if line.startswith("#"):
+                            continue
+                        c=line.split()
+                        if len(c)==0:
+                            continue
+                        else:
+                            c=line.strip()
 
+                            c=c.split('#')
+                            if len(line)<20:
+                                continue
+                            
+
+                            SplitTest = line.split(',')                    
+                            #判断有没有逗号,有逗号获取逗号前面的地址
+                            if len(SplitTest)>1:
+                                resline= SplitTest[0]
+                            else:
+                                resline=line   
+
+                            if resline.find("https://www.douyin.com/user/")>-1:
+                                res=searchUserWeb(resline)
+                                #判断有没有正常返回路径. 如果上面函数出错,会返回输入的值. 那么判断出错,就跳过
+                                if res!=resline and res!="" and res !=None:
+                                    lastdyurl=res
+                                    namelist.append(str(resline)+"|"+str(res))
+                                    while len(namelist):    
+                                        a=namelist.pop()
+                                        replacewords = a.split('|')                                        
+                                        if replacewords[0]!=replacewords[1]:                                
+                                            updateFile(r"URL_config.ini", replacewords[0], replacewords[1])     
+                                            print("转换了路径为:"+str(replacewords[1]))      
+                                        #直接增加    
+                                                                         
+
+                                        if replacewords[1] not in live_all:
+                                            live_all.append(replacewords[1])
+                                            # work.put_nowait(i[0])
+                                            work.put(replacewords[1], block=False, timeout=0) #放到最前面
+                                        runingList.append(replacewords[1])    
+                    time.sleep(3)     
+                    if i>10:
+                        i=0
+                        time.sleep(30)   
+   
+        except Exception as e:
+            print("错误信息: "+str(e)  +" 发生错误的行数: "+str(e.__traceback__.tb_lineno)  )    
+            logger.warning("错误信息: "+str(e)  +" 发生错误的行数: "+str(e.__traceback__.tb_lineno)) 
+        time.sleep(5)                             
 #--------------------------------------------------------------------------------------------------------------------------------------------
 #最开始运行下面的
 
@@ -2156,8 +2250,8 @@ def read_ini():
     #将函数内的变量设置为全局变量
     #使用 globals() 函数将所有变量声明为全局变量
 
-    global texturl,firstStart,Monitoring,tsconvertmp4,delFilebeforeconversion,tsconvertm4a,delFilebeforeconversion,tranform_int_to_time,tranform_int_to_time,cookiesSet,displayChrome,chrome_options,videoQuality,videoQuality,videoQuality,onlybrowser,videom3u8,videosavetype,videosavetype,creatTimeFile,videosavetype,creatTimeFile,videosavetype,creatTimeFile,videosavetype,tsconvertm4a,videosavetype,tsconvertm4a,Splitvideobysize,Splitsize,Splitsize,creatTimeFile,Splitsizes,tsconvertmp4,tsconvertm4a,creatTimeFile,tsconvertmp4,tsconvertm4a,delaydefault,looptime,looptime,rid,displayChrome,chrome_options,rid,Splitvideobysize,Splitsize,onlybrowser,videoQuality,videosavetype,rid,onlybrowser,rid,rid,videom3u8,videosavetype,videosavetype,creatTimeFile,videosavetype,creatTimeFile,videosavetype,creatTimeFile,videosavetype,tsconvertm4a,videosavetype,tsconvertm4a,Splitvideobysize,Splitsize,Splitsize,creatTimeFile,Splitsizes,tsconvertmp4,tsconvertm4a,creatTimeFile,tsconvertmp4,tsconvertm4a,coverlongurl,localdelaydefault,rid
-    global live_all,line_count,maxrequest
+    global texturl,firstStart,Monitoring,tsconvertmp4,delFilebeforeconversion,tsconvertm4a,delFilebeforeconversion,tranform_int_to_time,tranform_int_to_time,cookiesSet,cookiesSet_homepage,displayChrome,chrome_options,videoQuality,videoQuality,videoQuality,onlybrowser,videom3u8,videosavetype,videosavetype,creatTimeFile,videosavetype,creatTimeFile,videosavetype,creatTimeFile,videosavetype,tsconvertm4a,videosavetype,tsconvertm4a,Splitvideobysize,Splitsize,Splitsize,creatTimeFile,Splitsizes,tsconvertmp4,tsconvertm4a,creatTimeFile,tsconvertmp4,tsconvertm4a,delaydefault,looptime,looptime,rid,displayChrome,chrome_options,rid,Splitvideobysize,Splitsize,onlybrowser,videoQuality,videosavetype,rid,onlybrowser,rid,rid,videom3u8,videosavetype,videosavetype,creatTimeFile,videosavetype,creatTimeFile,videosavetype,creatTimeFile,videosavetype,tsconvertm4a,videosavetype,tsconvertm4a,Splitvideobysize,Splitsize,Splitsize,creatTimeFile,Splitsizes,tsconvertmp4,tsconvertm4a,creatTimeFile,tsconvertmp4,tsconvertm4a,coverlongurl,localdelaydefault,rid
+    global live_all,line_count,maxrequest,textNoRepeatUrl
     while True:    
         #循环读取配置
         try:
@@ -2973,10 +3067,12 @@ def read_ini():
         try:
             config = RawConfigParser()
             config.read('config.ini', encoding='utf-8-sig')
-            cookiesSet=config.get('1', 'cookies')
+            cookiesSet_temp=config.get('1', '抖音直播间cookies')
+            if cookiesSet_temp != "":
+                cookiesSet=cookiesSet_temp
 
-            if cookiesSet=="":        
-                cookiesSet = get_cookies()
+            # if cookiesSet=="":        
+            #     cookiesSet = get_cookies()
         except:
             config = configparser.ConfigParser()
             # -read读取ini文件
@@ -2987,20 +3083,47 @@ def read_ini():
                 config.add_section('1')
 
             else:
-                config.remove_option('1', 'cookies')# 删除type分组的stuno
+                config.remove_option('1', '抖音直播间cookies')# 删除type分组的stuno
                 # config.remove_section('tpye')# 删除配置文件中type分组
 
-            config.set('1', 'cookies', '')# 给type分组设置值
+            config.set('1', '抖音直播间cookies', '')# 给type分组设置值
 
             o = open('config.ini', 'w',encoding='utf-8-sig')
 
             config.write(o)
             
             o.close()#不要忘记关闭
-            cookiesSet = get_cookies()
+            # cookiesSet = get_cookies()
 
 
+        try:
+            config = RawConfigParser()
+            config.read('config.ini', encoding='utf-8-sig')
+            cookiesSet_homepage=config.get('1', '抖音个人主页cookies')
 
+            # if cookiesSet_homepage=="":        
+            #     cookiesSet_homepage = get_cookies()
+        except:
+            config = configparser.ConfigParser()
+            # -read读取ini文件
+            config.read('config.ini', encoding='utf-8-sig')
+            listx = []
+            listx = config.sections()# 获取到配置文件中所有分组名称
+            if '1' not in listx:# 如果分组type不存在则插入type分组
+                config.add_section('1')
+
+            else:
+                config.remove_option('1', '抖音个人主页cookies')# 删除type分组的stuno
+                # config.remove_section('tpye')# 删除配置文件中type分组
+
+            config.set('1', '抖音个人主页cookies', '')# 给type分组设置值
+
+            o = open('config.ini', 'w',encoding='utf-8-sig')
+
+            config.write(o)
+            
+            o.close()#不要忘记关闭
+            cookiesSet_homepage = ""
         
 
         # 谷歌浏览器驱动地址 
@@ -3054,23 +3177,9 @@ def read_ini():
                         resline=line   
 
                     #短连接转换长连接
-                    if coverlongurl:
-                        #查询是否为主页:有下面这个网址的,返回位置
-                        if resline.find("https://www.douyin.com/user/")>-1:
-                            res=searchUserWeb(resline)
-                            #判断有没有正常返回路径. 如果上面函数出错,会返回输入的值. 那么判断出错,就跳过
-                            if res!=resline and res!="":
-                                lastdyurl=res
-                                namelist.append(str(resline)+"|"+str(res))
-                                while len(namelist):    
-                                    a=namelist.pop()
-                                    replacewords = a.split('|')
-                                    print("转换了路径为:"+str())
-                                    if replacewords[0]!=replacewords[1]:                                
-                                        updateFile(r"URL_config.ini", replacewords[0], replacewords[1])     
-                                        print("转换了路径为:"+str(replacewords[1]))                    
+                    if coverlongurl:                                   
 
-                        elif resline.find("https://v.douyin.com/")>-1:
+                        if resline.find("https://v.douyin.com/")>-1:
                             #查询短链接
                             dyUrlGroup=checkUrlTxt(resline)
                             if len(dyUrlGroup)==2:
@@ -3095,7 +3204,8 @@ def read_ini():
                             lastdyurl=(resline,"")
 
                         texturl.append(lastdyurl)
-
+                    elif resline.find("https://www.douyin.com/user/")>-1:
+                        pass
 
                     else:                    
                         print(str(resline)+" 未知链接.此条跳过")
@@ -3178,14 +3288,26 @@ if __name__ == '__main__':
         print("检测到ffmpeg不存在,请将ffmpeg.exe放到同目录,或者设置为环境变量,没有ffmpeg将无法录制")
     # #备份
     # t3 = threading.Thread(target=backup_file_start, args=(), daemon=True)
-    # t3.start()  
+    # t3.start() 
+    # 
 
+    #先获取cookies 
+
+    if cookiesSet == "":
+        cookiesSet = get_cookies()
+    
+    
     t = threading.Thread(target=displayinfo, args=(), daemon=True)
     t.start()
     t2 = threading.Thread(target=changemaxconnect, args=(), daemon=True)
     t2.start()  
     t2 = threading.Thread(target=read_ini, args=(), daemon=True)
     t2.start()  
+    t3 = threading.Thread(target=homepage_monitoring, args=(), daemon=True)
+    t3.start()  
+    #获取cookies
+    t4 = threading.Thread(target=auto_getcookies, args=(), daemon=True)
+    t4.start()  
 
     firstRunOtherLine=False
 
