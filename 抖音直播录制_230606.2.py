@@ -1458,7 +1458,7 @@ def checkUrlTxt(UrlTxt):
 
 def displayinfo():
     global start5
-    time.sleep(3)
+    time.sleep(10)
     while True:
         try:
             
@@ -2175,10 +2175,10 @@ def stargo_single():
 
         # print("排队1s")
         if i>20:
-            print("排队等待30秒")
-            time.sleep(30)
+            print(f"排队等待{delaydefault}秒")
+            time.sleep(delaydefault)
             i=0
-        time.sleep(1)    
+        #time.sleep(1)    
         time.sleep(localdelaydefault)
 
 def homepage_monitoring():  #主页监控
@@ -3252,9 +3252,10 @@ def read_ini():
             live_all=list(set(live_all)) #排重
             #如果一轮用完就这样
             if work.empty():
-                print("一轮检测完毕,休息 "+str(delaydefault)+' 秒(休息过程中无法读取新链接)')
-                time.sleep(delaydefault) #一轮后,休息60秒       
-                print("休息完毕,继续检测")
+                # print("一轮检测完毕,休息 "+str(delaydefault)+' 秒(休息过程中无法读取新链接)')
+                # time.sleep(delaydefault) #一轮后,休息60秒       
+                # print("休息完毕,继续检测")
+                time.sleep(5)
                 for xa in live_all:
                     work.put_nowait(xa)
             # print("live_all",live_all)
